@@ -94,6 +94,34 @@
     return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   }
 
+  const THEME_KEY = 'fintrack_theme';
+
+  // --- Theme Management ---
+  function getPreferredTheme() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved) return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    renderCharts();
+  }
+
+  function isDarkMode() {
+    return document.documentElement.getAttribute('data-theme') === 'dark';
+  }
+
+  // Apply theme immediately to prevent flash
+  applyTheme(getPreferredTheme());
+
   // --- DOM References ---
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -118,6 +146,16 @@
     sidebar.classList.remove('open');
     overlay.classList.remove('active');
   }
+
+  $('#themeToggle').addEventListener('click', toggleTheme);
+
+  // Listen for OS theme changes
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!localStorage.getItem(THEME_KEY)) {
+      applyTheme(e.matches ? 'dark' : 'light');
+      renderCharts();
+    }
+  });
 
   menuToggle.addEventListener('click', openSidebar);
   sidebarClose.addEventListener('click', closeSidebar);
@@ -604,6 +642,30 @@
     drawDoughnutChart(ctx, canvas, entries.map(e => e[0]), entries.map(e => e[1]), CHART_COLORS);
   }
 
+  // --- Chart Theme Colors ---
+  function chartColors() {
+    if (isDarkMode()) {
+      return {
+        grid: '#334155',
+        axisLabel: '#94a3b8',
+        barLabel: '#94a3b8',
+        legendText: '#cbd5e1',
+        centerText: '#f1f5f9',
+        centerSub: '#94a3b8',
+        emptyText: '#94a3b8'
+      };
+    }
+    return {
+      grid: '#e2e8f0',
+      axisLabel: '#94a3b8',
+      barLabel: '#64748b',
+      legendText: '#475569',
+      centerText: '#1e293b',
+      centerSub: '#64748b',
+      emptyText: '#94a3b8'
+    };
+  }
+
   // --- Canvas Drawing Helpers ---
   function setupCanvas(canvas) {
     const rect = canvas.getBoundingClientRect();
@@ -624,11 +686,13 @@
 
     ctx.clearRect(0, 0, width, height);
 
+    const tc = chartColors();
+
     // Grid lines
-    ctx.strokeStyle = '#e2e8f0';
+    ctx.strokeStyle = tc.grid;
     ctx.lineWidth = 1;
     ctx.font = '11px -apple-system, sans-serif';
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = tc.axisLabel;
     ctx.textAlign = 'right';
 
     const gridLines = 5;
@@ -664,7 +728,7 @@
     });
 
     // Labels
-    ctx.fillStyle = '#64748b';
+    ctx.fillStyle = tc.barLabel;
     ctx.textAlign = 'center';
     ctx.font = '11px -apple-system, sans-serif';
 
@@ -679,7 +743,7 @@
     datasets.forEach(ds => {
       ctx.fillStyle = ds.color;
       ctx.fillRect(legendX, 8, 12, 12);
-      ctx.fillStyle = '#475569';
+      ctx.fillStyle = tc.legendText;
       ctx.textAlign = 'left';
       ctx.fillText(ds.label, legendX + 16, 18);
       legendX += ctx.measureText(ds.label).width + 36;
@@ -714,11 +778,12 @@
     });
 
     // Center text
-    ctx.fillStyle = '#1e293b';
+    const tc = chartColors();
+    ctx.fillStyle = tc.centerText;
     ctx.font = 'bold 16px -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(formatCurrency(total), centerX, centerY - 2);
-    ctx.fillStyle = '#64748b';
+    ctx.fillStyle = tc.centerSub;
     ctx.font = '11px -apple-system, sans-serif';
     ctx.fillText('Total', centerX, centerY + 14);
 
@@ -731,7 +796,7 @@
       const y = legendStartY + i * 22;
       ctx.fillStyle = colors[i % colors.length];
       ctx.fillRect(legendX, y - 5, 10, 10);
-      ctx.fillStyle = '#475569';
+      ctx.fillStyle = tc.legendText;
       ctx.font = '11px -apple-system, sans-serif';
 
       const pct = ((data[i] / total) * 100).toFixed(0);
@@ -744,7 +809,7 @@
     const { width, height } = setupCanvas(canvas);
     ctx.clearRect(0, 0, width, height);
 
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = chartColors().emptyText;
     ctx.font = '14px -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(message, width / 2, height / 2);

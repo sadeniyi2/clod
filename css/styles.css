@@ -31,6 +31,74 @@
   --transition: 0.2s ease;
 }
 
+/* --- Dark Theme --- */
+[data-theme="dark"] {
+  --color-primary: #818cf8;
+  --color-primary-light: #a5b4fc;
+  --color-primary-dark: #6366f1;
+  --color-income: #34d399;
+  --color-income-light: #064e3b;
+  --color-expense: #f87171;
+  --color-expense-light: #7f1d1d;
+  --color-balance: #60a5fa;
+  --color-balance-light: #1e3a5f;
+  --color-savings: #fbbf24;
+  --color-savings-light: #78350f;
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-border: #334155;
+  --color-hover: #283548;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .nav-item.active {
+  background: #312e81;
+}
+
+[data-theme="dark"] .cat-food { background: #78350f; }
+[data-theme="dark"] .cat-transport { background: #1e3a5f; }
+[data-theme="dark"] .cat-housing { background: #312e81; }
+[data-theme="dark"] .cat-utilities { background: #064e3b; }
+[data-theme="dark"] .cat-entertainment { background: #831843; }
+[data-theme="dark"] .cat-shopping { background: #581c87; }
+[data-theme="dark"] .cat-health { background: #7f1d1d; }
+[data-theme="dark"] .cat-education { background: #0c4a6e; }
+[data-theme="dark"] .cat-other-expense { background: #334155; }
+[data-theme="dark"] .cat-salary { background: #064e3b; }
+[data-theme="dark"] .cat-freelance { background: #164e63; }
+[data-theme="dark"] .cat-investment { background: #78350f; }
+[data-theme="dark"] .cat-other-income { background: #312e81; }
+
+[data-theme="dark"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .form-group select {
+  background: #0f172a;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .filter-select,
+[data-theme="dark"] .filter-input {
+  background: #0f172a;
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: #334155;
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: #475569;
+}
+
 /* --- Reset & Base --- */
 *,
 *::before,
@@ -177,7 +245,36 @@ a {
 
 .topbar-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
+
+/* --- Theme Toggle --- */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-toggle:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.icon-moon { display: none; }
+.icon-sun { display: block; }
+
+[data-theme="dark"] .icon-moon { display: block; }
+[data-theme="dark"] .icon-sun { display: none; }
 
 /* --- Buttons --- */
 .btn {

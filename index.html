@@ -31,6 +31,10 @@
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
           <span>Goals</span>
         </a>
+        <a href="#" class="nav-item" data-section="saver">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <span>AI Saver</span>
+        </a>
       </nav>
     </aside>
 
@@ -172,7 +176,78 @@
           <p class="empty-state">No savings goals yet. Set a goal to start saving.</p>
         </div>
       </section>
+
+      <!-- AI Saver Section -->
+      <section class="content-section" id="section-saver">
+        <div class="saver-header">
+          <div class="saver-hero card">
+            <div class="saver-hero-icon">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <div>
+              <h3>AI Personal Saver</h3>
+              <p class="saver-subtitle">Smart insights to help you save more and spend wisely</p>
+            </div>
+            <button class="btn btn-primary" id="refreshSaverBtn">Refresh Analysis</button>
+          </div>
+        </div>
+        <div class="saver-score-row">
+          <div class="card saver-score-card">
+            <div class="saver-score-label">Financial Health Score</div>
+            <div class="saver-score-circle" id="healthScore">
+              <svg viewBox="0 0 100 100" width="120" height="120">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="var(--color-border)" stroke-width="8"/>
+                <circle id="healthScoreArc" cx="50" cy="50" r="42" fill="none" stroke="var(--color-primary)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 264" transform="rotate(-90 50 50)"/>
+                <text x="50" y="46" text-anchor="middle" font-size="20" font-weight="700" fill="var(--color-text)" id="healthScoreText">--</text>
+                <text x="50" y="62" text-anchor="middle" font-size="10" fill="var(--color-text-secondary)">/ 100</text>
+              </svg>
+            </div>
+            <div class="saver-score-verdict" id="healthVerdict">Add data to see your score</div>
+          </div>
+          <div class="card saver-potential-card">
+            <div class="saver-potential-label">Monthly Savings Potential</div>
+            <div class="saver-potential-amount" id="savingsPotential">--</div>
+            <div class="saver-potential-detail" id="savingsPotentialDetail">Based on your spending patterns</div>
+          </div>
+        </div>
+        <div class="saver-insights" id="saverInsights">
+          <p class="empty-state">Analyzing your finances...</p>
+        </div>
+      </section>
     </main>
+  </div>
+
+  <!-- AI Chatbot Widget -->
+  <button class="chatbot-fab" id="chatbotFab" aria-label="Open AI Assistant">
+    <svg class="chatbot-fab-icon-open" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <svg class="chatbot-fab-icon-close" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <div class="chatbot-panel" id="chatbotPanel">
+    <div class="chatbot-header">
+      <div class="chatbot-header-info">
+        <div class="chatbot-avatar">AI</div>
+        <div>
+          <div class="chatbot-name">FinTrack AI</div>
+          <div class="chatbot-status">Your financial assistant</div>
+        </div>
+      </div>
+      <button class="chatbot-clear" id="chatbotClear" title="Clear chat">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    </div>
+    <div class="chatbot-messages" id="chatbotMessages"></div>
+    <div class="chatbot-suggestions" id="chatbotSuggestions">
+      <button class="chatbot-chip" data-q="How am I doing this month?">Monthly summary</button>
+      <button class="chatbot-chip" data-q="Where am I spending the most?">Top spending</button>
+      <button class="chatbot-chip" data-q="How can I save more?">Saving tips</button>
+      <button class="chatbot-chip" data-q="How are my goals?">Goal progress</button>
+    </div>
+    <form class="chatbot-input-bar" id="chatbotForm">
+      <input type="text" id="chatbotInput" placeholder="Ask about your finances..." autocomplete="off">
+      <button type="submit" class="chatbot-send" aria-label="Send">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </form>
   </div>
 
   <!-- Add Transaction Modal -->

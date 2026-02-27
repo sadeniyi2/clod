@@ -230,11 +230,12 @@
       dashboard: 'Dashboard',
       transactions: 'Transactions',
       budgets: 'Budgets',
-      goals: 'Savings Goals'
+      goals: 'Savings Goals',
+      saver: 'AI Personal Saver'
     };
     pageTitle.textContent = titles[section] || 'Dashboard';
 
-    addTransactionBtn.style.display = section === 'dashboard' || section === 'transactions' ? '' : 'none';
+    addTransactionBtn.style.display = (section === 'dashboard' || section === 'transactions') ? '' : 'none';
 
     closeSidebar();
     renderCurrentSection(section);
@@ -422,6 +423,7 @@
     renderBudgets();
     renderGoals();
     renderCharts();
+    renderSaver();
   }
 
   function renderCurrentSection(section) {
@@ -435,6 +437,8 @@
       renderBudgets();
     } else if (section === 'goals') {
       renderGoals();
+    } else if (section === 'saver') {
+      renderSaver();
     }
   }
 
@@ -904,6 +908,393 @@
   window._deleteBudget = deleteBudget;
   window._addToGoal = addToGoal;
   window._deleteGoal = deleteGoal;
+
+  // --- AI Personal Saver ---
+  function getFinanceSnapshot() {
+    const currentMonth = getCurrentMonth();
+    const monthTx = state.transactions.filter(t => t.date.startsWith(currentMonth));
+    const income = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const expenses = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const balance = income - expenses;
+    const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
+
+    // Category breakdown
+    const catSpend = {};
+    monthTx.filter(t => t.type === 'expense').forEach(t => {
+      const label = CATEGORY_MAP[t.category]?.label || t.category;
+      catSpend[label] = (catSpend[label] || 0) + t.amount;
+    });
+    const topCategories = Object.entries(catSpend).sort((a, b) => b[1] - a[1]);
+
+    // Previous month comparison
+    const now = new Date();
+    const pmStr = now.getMonth() === 0
+      ? (now.getFullYear() - 1) + '-12'
+      : now.getFullYear() + '-' + String(now.getMonth()).padStart(2, '0');
+    const prevTx = state.transactions.filter(t => t.date.startsWith(pmStr));
+    const prevExpenses = prevTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const prevIncome = prevTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+
+    // Budget status
+    const budgetStatus = state.budgets.map(b => {
+      const spent = monthTx.filter(t => t.type === 'expense' && t.category === b.category).reduce((s, t) => s + t.amount, 0);
+      return { ...b, spent, pct: b.amount > 0 ? (spent / b.amount) * 100 : 0, label: CATEGORY_MAP[b.category]?.label || b.category };
+    });
+
+    return { income, expenses, balance, savingsRate, topCategories, prevExpenses, prevIncome, budgetStatus, monthTx };
+  }
+
+  function computeHealthScore(snap) {
+    let score = 50;
+    // Savings rate bonus (up to 25 pts)
+    if (snap.savingsRate >= 20) score += 25;
+    else if (snap.savingsRate >= 10) score += 15;
+    else if (snap.savingsRate > 0) score += 5;
+    else score -= 10;
+
+    // Budget adherence (up to 15 pts)
+    if (snap.budgetStatus.length > 0) {
+      const avgAdherence = snap.budgetStatus.reduce((s, b) => s + Math.min(b.pct, 100), 0) / snap.budgetStatus.length;
+      if (avgAdherence <= 80) score += 15;
+      else if (avgAdherence <= 100) score += 5;
+      else score -= 5;
+    }
+
+    // Month-over-month expense change (up to 10 pts)
+    if (snap.prevExpenses > 0) {
+      const change = ((snap.expenses - snap.prevExpenses) / snap.prevExpenses) * 100;
+      if (change < -5) score += 10;
+      else if (change < 5) score += 5;
+      else score -= 5;
+    }
+
+    // Goals progress
+    if (state.goals.length > 0) {
+      const avgProgress = state.goals.reduce((s, g) => s + (g.current / g.target), 0) / state.goals.length * 100;
+      if (avgProgress >= 50) score += 5;
+    }
+
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+
+  function generateInsights(snap) {
+    const insights = [];
+
+    // Spending trend
+    if (snap.prevExpenses > 0) {
+      const change = ((snap.expenses - snap.prevExpenses) / snap.prevExpenses) * 100;
+      if (change > 10) {
+        insights.push({ type: 'warning', icon: '📈', title: 'Spending is up ' + Math.abs(change).toFixed(0) + '%',
+          text: `You've spent ${formatCurrency(snap.expenses)} this month vs ${formatCurrency(snap.prevExpenses)} last month. Review your categories below to identify where the increase is coming from.`, tag: 'caution' });
+      } else if (change < -5) {
+        insights.push({ type: 'success', icon: '📉', title: 'Spending down ' + Math.abs(change).toFixed(0) + '%',
+          text: `Great job! You've reduced spending to ${formatCurrency(snap.expenses)} from ${formatCurrency(snap.prevExpenses)} last month. Keep it up!`, tag: 'save' });
+      }
+    }
+
+    // Top expense category alert
+    if (snap.topCategories.length > 0) {
+      const [topCat, topAmt] = snap.topCategories[0];
+      const pct = snap.expenses > 0 ? ((topAmt / snap.expenses) * 100).toFixed(0) : 0;
+      insights.push({ type: 'tip', icon: '🏷️', title: `${topCat} is your #1 expense`,
+        text: `${formatCurrency(topAmt)} (${pct}% of all spending). ${topAmt > snap.income * 0.3 ? 'This is over 30% of your income — consider ways to reduce it.' : 'This looks manageable relative to your income.'}`, tag: 'info' });
+    }
+
+    // Budget warnings
+    snap.budgetStatus.forEach(b => {
+      if (b.pct >= 100) {
+        insights.push({ type: 'alert', icon: '🚨', title: `${b.label} budget exceeded`,
+          text: `You've spent ${formatCurrency(b.spent)} against a ${formatCurrency(b.amount)} budget. You're ${formatCurrency(b.spent - b.amount)} over — try to avoid more spending in this category.`, tag: 'caution' });
+      } else if (b.pct >= 80) {
+        insights.push({ type: 'warning', icon: '⚠️', title: `${b.label} budget at ${b.pct.toFixed(0)}%`,
+          text: `${formatCurrency(b.amount - b.spent)} remaining. Pace yourself for the rest of the month.`, tag: 'caution' });
+      }
+    });
+
+    // Savings rate insight
+    if (snap.income > 0) {
+      if (snap.savingsRate < 10) {
+        insights.push({ type: 'alert', icon: '💡', title: 'Low savings rate: ' + snap.savingsRate.toFixed(1) + '%',
+          text: 'Financial experts recommend saving at least 20% of income. Look for non-essential expenses to cut back on.', tag: 'caution' });
+      } else if (snap.savingsRate >= 20) {
+        insights.push({ type: 'success', icon: '🎯', title: 'Excellent savings rate: ' + snap.savingsRate.toFixed(1) + '%',
+          text: 'You\'re saving above the recommended 20% — you\'re on track for your financial goals!', tag: 'save' });
+      }
+    }
+
+    // Goal insights
+    state.goals.forEach(goal => {
+      const pct = (goal.current / goal.target) * 100;
+      if (goal.deadline) {
+        const daysLeft = Math.ceil((new Date(goal.deadline) - new Date()) / (1000 * 60 * 60 * 24));
+        const remaining = goal.target - goal.current;
+        if (daysLeft > 0 && remaining > 0) {
+          const monthsLeft = Math.max(1, daysLeft / 30);
+          const perMonth = remaining / monthsLeft;
+          insights.push({ type: 'tip', icon: '🎯', title: `"${goal.name}" needs ${formatCurrency(perMonth)}/mo`,
+            text: `${daysLeft} days left to save ${formatCurrency(remaining)}. ${perMonth <= snap.balance ? 'This is achievable with your current surplus!' : 'You may need to cut expenses to hit this target.'}`, tag: 'info' });
+        } else if (daysLeft <= 0 && remaining > 0) {
+          insights.push({ type: 'alert', icon: '⏰', title: `"${goal.name}" deadline passed`,
+            text: `You still need ${formatCurrency(remaining)} to reach your goal. Consider setting a new deadline.`, tag: 'caution' });
+        }
+      }
+      if (pct >= 100) {
+        insights.push({ type: 'success', icon: '🎉', title: `"${goal.name}" reached!`,
+          text: `Congratulations! You've saved ${formatCurrency(goal.current)} and hit your target.`, tag: 'save' });
+      }
+    });
+
+    // Potential savings
+    if (snap.topCategories.length >= 2) {
+      const discretionary = snap.topCategories
+        .filter(([cat]) => !['Housing', 'Utilities'].includes(cat))
+        .reduce((s, [, amt]) => s + amt, 0);
+      const potential = discretionary * 0.15;
+      if (potential > 0) {
+        insights.push({ type: 'tip', icon: '💰', title: `Save up to ${formatCurrency(potential)}/month`,
+          text: 'By reducing discretionary spending (excluding housing & utilities) by 15%, you could save this much extra every month.', tag: 'save' });
+      }
+    }
+
+    if (insights.length === 0) {
+      insights.push({ type: 'tip', icon: '📊', title: 'Add more data for insights',
+        text: 'Keep tracking your income and expenses — the AI Saver will provide personalized tips once it has more data to work with.', tag: 'info' });
+    }
+
+    return insights;
+  }
+
+  function renderSaver() {
+    const snap = getFinanceSnapshot();
+    const score = computeHealthScore(snap);
+
+    // Health score arc
+    const arc = document.getElementById('healthScoreArc');
+    const scoreText = document.getElementById('healthScoreText');
+    const verdict = document.getElementById('healthVerdict');
+    if (arc) {
+      const circumference = 2 * Math.PI * 42;
+      const dashLen = (score / 100) * circumference;
+      arc.setAttribute('stroke-dasharray', `${dashLen} ${circumference}`);
+      arc.setAttribute('stroke', score >= 70 ? 'var(--color-income)' : score >= 40 ? 'var(--color-savings)' : 'var(--color-expense)');
+    }
+    if (scoreText) scoreText.textContent = score;
+    if (verdict) {
+      if (score >= 80) verdict.textContent = 'Excellent — keep it up!';
+      else if (score >= 60) verdict.textContent = 'Good — room for improvement';
+      else if (score >= 40) verdict.textContent = 'Fair — review the tips below';
+      else verdict.textContent = 'Needs attention — check insights';
+    }
+
+    // Savings potential
+    const discretionary = snap.topCategories
+      .filter(([cat]) => !['Housing', 'Utilities'].includes(cat))
+      .reduce((s, [, amt]) => s + amt, 0);
+    const potential = discretionary * 0.15;
+    const potentialEl = document.getElementById('savingsPotential');
+    if (potentialEl) potentialEl.textContent = formatCurrency(potential);
+
+    // Insights
+    const insights = generateInsights(snap);
+    const container = document.getElementById('saverInsights');
+    if (container) {
+      container.innerHTML = insights.map(i => `
+        <div class="insight-card">
+          <div class="insight-icon ${i.type}">${i.icon}</div>
+          <div class="insight-body">
+            <div class="insight-title">${i.title}</div>
+            <div class="insight-text">${i.text}</div>
+            <span class="insight-tag tag-${i.tag}">${i.tag === 'save' ? 'Savings Tip' : i.tag === 'caution' ? 'Caution' : 'Info'}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  const refreshSaverBtn = document.getElementById('refreshSaverBtn');
+  if (refreshSaverBtn) {
+    refreshSaverBtn.addEventListener('click', renderSaver);
+  }
+
+  // --- AI Chatbot ---
+  const chatFab = document.getElementById('chatbotFab');
+  const chatPanel = document.getElementById('chatbotPanel');
+  const chatMessages = document.getElementById('chatbotMessages');
+  const chatForm = document.getElementById('chatbotForm');
+  const chatInput = document.getElementById('chatbotInput');
+  const chatClear = document.getElementById('chatbotClear');
+
+  if (chatFab) {
+    chatFab.addEventListener('click', () => {
+      const isOpen = chatPanel.classList.toggle('active');
+      chatFab.classList.toggle('active', isOpen);
+      if (isOpen && chatMessages.children.length === 0) {
+        addBotMessage('Hi! I\'m your FinTrack AI assistant. Ask me about your spending, budgets, goals, or savings tips.');
+      }
+      if (isOpen) chatInput.focus();
+    });
+  }
+
+  if (chatClear) {
+    chatClear.addEventListener('click', () => {
+      chatMessages.innerHTML = '';
+      addBotMessage('Chat cleared. How can I help you?');
+    });
+  }
+
+  $$('.chatbot-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const q = chip.dataset.q;
+      if (q) handleChatQuery(q);
+    });
+  });
+
+  if (chatForm) {
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const q = chatInput.value.trim();
+      if (!q) return;
+      chatInput.value = '';
+      handleChatQuery(q);
+    });
+  }
+
+  function addBotMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'chat-msg bot';
+    div.innerHTML = text;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function addUserMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'chat-msg user';
+    div.textContent = text;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function showTyping() {
+    const div = document.createElement('div');
+    div.className = 'chat-typing';
+    div.id = 'chatTyping';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function removeTyping() {
+    const el = document.getElementById('chatTyping');
+    if (el) el.remove();
+  }
+
+  function handleChatQuery(query) {
+    addUserMessage(query);
+    showTyping();
+
+    setTimeout(() => {
+      removeTyping();
+      const response = generateChatResponse(query);
+      addBotMessage(response);
+    }, 500 + Math.random() * 500);
+  }
+
+  function generateChatResponse(query) {
+    const q = query.toLowerCase();
+    const snap = getFinanceSnapshot();
+
+    // Monthly summary
+    if (q.includes('month') && (q.includes('summary') || q.includes('doing') || q.includes('overview') || q.includes('how'))) {
+      return `Here's your monthly snapshot:<br><br>` +
+        `<strong>Income:</strong> ${formatCurrency(snap.income)}<br>` +
+        `<strong>Expenses:</strong> ${formatCurrency(snap.expenses)}<br>` +
+        `<strong>Balance:</strong> ${formatCurrency(snap.balance)}<br>` +
+        `<strong>Savings rate:</strong> ${snap.savingsRate.toFixed(1)}%<br><br>` +
+        (snap.savingsRate >= 20 ? 'You\'re doing great this month!' : snap.savingsRate > 0 ? 'Try to push your savings rate toward 20%.' : 'You\'re spending more than you earn — time to review expenses.');
+    }
+
+    // Top spending / categories
+    if (q.includes('spend') || q.includes('category') || q.includes('top') || q.includes('most') || q.includes('where')) {
+      if (snap.topCategories.length === 0) return 'No expenses recorded this month yet.';
+      const lines = snap.topCategories.slice(0, 5).map(([cat, amt], i) => {
+        const pct = ((amt / snap.expenses) * 100).toFixed(0);
+        return `${i + 1}. <strong>${cat}</strong> — ${formatCurrency(amt)} (${pct}%)`;
+      });
+      return 'Your top spending categories this month:<br><br>' + lines.join('<br>');
+    }
+
+    // Saving tips
+    if (q.includes('save') || q.includes('saving') || q.includes('tip') || q.includes('cut') || q.includes('reduce')) {
+      const tips = [];
+      snap.topCategories.forEach(([cat, amt]) => {
+        if (!['Housing', 'Utilities'].includes(cat) && amt > snap.expenses * 0.15) {
+          tips.push(`<strong>${cat}</strong> (${formatCurrency(amt)}) is a big chunk — could you trim 10-15%?`);
+        }
+      });
+      snap.budgetStatus.forEach(b => {
+        if (b.pct > 100) tips.push(`You're over your <strong>${b.label}</strong> budget by ${formatCurrency(b.spent - b.amount)}.`);
+      });
+      if (tips.length === 0) tips.push('Your spending looks balanced! Keep an emergency fund of 3-6 months of expenses.');
+      tips.push('Consider the 50/30/20 rule: 50% needs, 30% wants, 20% savings.');
+      return 'Here are some personalized tips:<br><br>' + tips.map(t => '• ' + t).join('<br>');
+    }
+
+    // Goals
+    if (q.includes('goal') || q.includes('target') || q.includes('progress')) {
+      if (state.goals.length === 0) return 'You don\'t have any savings goals yet. Set one up in the Goals section!';
+      const lines = state.goals.map(g => {
+        const pct = ((g.current / g.target) * 100).toFixed(1);
+        const remaining = g.target - g.current;
+        return `<strong>${g.name}</strong>: ${formatCurrency(g.current)} / ${formatCurrency(g.target)} (${pct}%)` + (remaining > 0 ? ` — ${formatCurrency(remaining)} to go` : ' — Reached!');
+      });
+      return 'Your savings goals:<br><br>' + lines.join('<br><br>');
+    }
+
+    // Budget
+    if (q.includes('budget')) {
+      if (state.budgets.length === 0) return 'No budgets set up yet. Head to the Budgets section to create one!';
+      const lines = snap.budgetStatus.map(b => {
+        const status = b.pct >= 100 ? '🔴 Over' : b.pct >= 80 ? '🟡 ' + b.pct.toFixed(0) + '%' : '🟢 ' + b.pct.toFixed(0) + '%';
+        return `${status} <strong>${b.label}</strong>: ${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`;
+      });
+      return 'Budget status this month:<br><br>' + lines.join('<br>');
+    }
+
+    // Income
+    if (q.includes('income') || q.includes('earn') || q.includes('salary')) {
+      return `Your total income this month is <strong>${formatCurrency(snap.income)}</strong>.` +
+        (snap.prevIncome > 0 ? `<br>Last month it was ${formatCurrency(snap.prevIncome)}.` : '');
+    }
+
+    // Balance
+    if (q.includes('balance') || q.includes('left') || q.includes('remain')) {
+      return `Your current monthly balance is <strong>${formatCurrency(snap.balance)}</strong> (income minus expenses).` +
+        (snap.balance < 0 ? '<br>You\'re in the red — try to reduce spending!' : '<br>You\'re in the positive — nice work!');
+    }
+
+    // Health score
+    if (q.includes('score') || q.includes('health') || q.includes('rate')) {
+      const score = computeHealthScore(snap);
+      return `Your financial health score is <strong>${score}/100</strong>.<br><br>` +
+        `Savings rate: ${snap.savingsRate.toFixed(1)}%<br>` +
+        (score >= 70 ? 'You\'re in great shape!' : score >= 40 ? 'There\'s room for improvement — check the AI Saver section for tips.' : 'This needs attention — review your spending and budgets.');
+    }
+
+    // Hello / greeting
+    if (q.includes('hello') || q.includes('hi') || q.includes('hey') || q.includes('help')) {
+      return 'Hi there! I can help you with:<br><br>' +
+        '• <strong>Monthly summary</strong> — your income & expenses<br>' +
+        '• <strong>Top spending</strong> — where your money goes<br>' +
+        '• <strong>Saving tips</strong> — personalized advice<br>' +
+        '• <strong>Goal progress</strong> — how close you are<br>' +
+        '• <strong>Budget status</strong> — are you on track?<br><br>' +
+        'Just ask a question or tap a suggestion below!';
+    }
+
+    // Fallback
+    return 'I can help with questions about your <strong>spending</strong>, <strong>income</strong>, <strong>budgets</strong>, <strong>goals</strong>, and <strong>savings tips</strong>. Try asking "How am I doing this month?" or "Where am I spending the most?"';
+  }
 
   // --- Initialize ---
   function init() {

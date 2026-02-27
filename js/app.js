@@ -24,8 +24,34 @@
     KRW: { code: 'KRW', symbol: '\u20A9', locale: 'ko-KR' }
   };
 
+  // Exchange rates relative to USD (1 USD = X of target currency)
+  const EXCHANGE_RATES = {
+    USD: 1,
+    EUR: 0.92,
+    GBP: 0.79,
+    JPY: 149.50,
+    CAD: 1.36,
+    AUD: 1.53,
+    CHF: 0.88,
+    CNY: 7.24,
+    INR: 83.12,
+    NGN: 1550.00,
+    BRL: 4.97,
+    KRW: 1325.00
+  };
+
   function getSelectedCurrency() {
     return localStorage.getItem(CURRENCY_KEY) || 'USD';
+  }
+
+  function convertFromUSD(amountInUSD) {
+    const rate = EXCHANGE_RATES[getSelectedCurrency()] || 1;
+    return amountInUSD * rate;
+  }
+
+  function convertToUSD(amountInLocal) {
+    const rate = EXCHANGE_RATES[getSelectedCurrency()] || 1;
+    return amountInLocal / rate;
   }
   const CATEGORY_MAP = {
     food: { label: 'Food & Dining', icon: '🍔', type: 'expense' },
@@ -86,11 +112,12 @@
 
   function formatCurrency(amount) {
     const cur = CURRENCIES[getSelectedCurrency()] || CURRENCIES.USD;
+    const converted = convertFromUSD(amount);
     return new Intl.NumberFormat(cur.locale, {
       style: 'currency',
       currency: cur.code,
       maximumFractionDigits: cur.code === 'JPY' || cur.code === 'KRW' ? 0 : 2
-    }).format(amount);
+    }).format(converted);
   }
 
   function formatDate(dateStr) {
@@ -271,7 +298,7 @@
     const transaction = {
       id: id || generateId(),
       type: $('#transactionType').value,
-      amount: parseFloat($('#transactionAmount').value),
+      amount: convertToUSD(parseFloat($('#transactionAmount').value)),
       category: $('#transactionCategory').value,
       description: $('#transactionDescription').value.trim(),
       date: $('#transactionDate').value
@@ -295,7 +322,7 @@
 
     $('#transactionId').value = t.id;
     $('#transactionType').value = t.type;
-    $('#transactionAmount').value = t.amount;
+    $('#transactionAmount').value = parseFloat(convertFromUSD(t.amount).toFixed(2));
     $('#transactionCategory').value = t.category;
     $('#transactionDescription').value = t.description;
     $('#transactionDate').value = t.date;
@@ -321,7 +348,7 @@
     e.preventDefault();
 
     const category = $('#budgetCategory').value;
-    const amount = parseFloat($('#budgetAmount').value);
+    const amount = convertToUSD(parseFloat($('#budgetAmount').value));
     const existing = state.budgets.findIndex(b => b.category === category);
 
     if (existing !== -1) {
@@ -354,8 +381,8 @@
     const goal = {
       id: generateId(),
       name: $('#goalName').value.trim(),
-      target: parseFloat($('#goalTarget').value),
-      current: parseFloat($('#goalCurrent').value) || 0,
+      target: convertToUSD(parseFloat($('#goalTarget').value)),
+      current: convertToUSD(parseFloat($('#goalCurrent').value) || 0),
       deadline: $('#goalDeadline').value || null
     };
 
@@ -369,12 +396,13 @@
     const goal = state.goals.find(g => g.id === id);
     if (!goal) return;
 
-    const amount = prompt('Enter amount to add:');
+    const cur = CURRENCIES[getSelectedCurrency()] || CURRENCIES.USD;
+    const amount = prompt(`Enter amount to add (${cur.symbol}):`);
     if (amount === null) return;
     const val = parseFloat(amount);
     if (isNaN(val) || val <= 0) return;
 
-    goal.current = Math.min(goal.current + val, goal.target);
+    goal.current = Math.min(goal.current + convertToUSD(val), goal.target);
     saveState();
     renderAll();
   }
@@ -857,8 +885,10 @@
 
   function formatCompact(num) {
     const sym = (CURRENCIES[getSelectedCurrency()] || CURRENCIES.USD).symbol;
-    if (num >= 1000) return sym + (num / 1000).toFixed(1) + 'k';
-    return sym + num.toFixed(0);
+    const converted = convertFromUSD(num);
+    if (converted >= 1000000) return sym + (converted / 1000000).toFixed(1) + 'M';
+    if (converted >= 1000) return sym + (converted / 1000).toFixed(1) + 'k';
+    return sym + converted.toFixed(0);
   }
 
   // --- Resize Handler ---

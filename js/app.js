@@ -7,6 +7,26 @@
 
   // --- Constants ---
   const STORAGE_KEY = 'fintrack_data';
+  const CURRENCY_KEY = 'fintrack_currency';
+
+  const CURRENCIES = {
+    USD: { code: 'USD', symbol: '$', locale: 'en-US' },
+    EUR: { code: 'EUR', symbol: '\u20AC', locale: 'de-DE' },
+    GBP: { code: 'GBP', symbol: '\u00A3', locale: 'en-GB' },
+    JPY: { code: 'JPY', symbol: '\u00A5', locale: 'ja-JP' },
+    CAD: { code: 'CAD', symbol: '$', locale: 'en-CA' },
+    AUD: { code: 'AUD', symbol: '$', locale: 'en-AU' },
+    CHF: { code: 'CHF', symbol: 'Fr', locale: 'de-CH' },
+    CNY: { code: 'CNY', symbol: '\u00A5', locale: 'zh-CN' },
+    INR: { code: 'INR', symbol: '\u20B9', locale: 'en-IN' },
+    NGN: { code: 'NGN', symbol: '\u20A6', locale: 'en-NG' },
+    BRL: { code: 'BRL', symbol: 'R$', locale: 'pt-BR' },
+    KRW: { code: 'KRW', symbol: '\u20A9', locale: 'ko-KR' }
+  };
+
+  function getSelectedCurrency() {
+    return localStorage.getItem(CURRENCY_KEY) || 'USD';
+  }
   const CATEGORY_MAP = {
     food: { label: 'Food & Dining', icon: '🍔', type: 'expense' },
     transport: { label: 'Transportation', icon: '🚗', type: 'expense' },
@@ -65,9 +85,11 @@
   }
 
   function formatCurrency(amount) {
-    return new Intl.NumberFormat('en-US', {
+    const cur = CURRENCIES[getSelectedCurrency()] || CURRENCIES.USD;
+    return new Intl.NumberFormat(cur.locale, {
       style: 'currency',
-      currency: 'USD'
+      currency: cur.code,
+      maximumFractionDigits: cur.code === 'JPY' || cur.code === 'KRW' ? 0 : 2
     }).format(amount);
   }
 
@@ -146,6 +168,13 @@
     sidebar.classList.remove('open');
     overlay.classList.remove('active');
   }
+
+  // --- Currency Selector ---
+  $('#currencySelect').value = getSelectedCurrency();
+  $('#currencySelect').addEventListener('change', (e) => {
+    localStorage.setItem(CURRENCY_KEY, e.target.value);
+    renderAll();
+  });
 
   $('#themeToggle').addEventListener('click', toggleTheme);
 
@@ -827,8 +856,9 @@
   }
 
   function formatCompact(num) {
-    if (num >= 1000) return '$' + (num / 1000).toFixed(1) + 'k';
-    return '$' + num.toFixed(0);
+    const sym = (CURRENCIES[getSelectedCurrency()] || CURRENCIES.USD).symbol;
+    if (num >= 1000) return sym + (num / 1000).toFixed(1) + 'k';
+    return sym + num.toFixed(0);
   }
 
   // --- Resize Handler ---
